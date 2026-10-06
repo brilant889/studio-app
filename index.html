@@ -145,6 +145,9 @@ button.mini:hover{background:var(--sunk)}
 .table tr:last-child td{border-bottom:0}
 .table td.n,.table th.n{text-align:right;font-variant-numeric:tabular-nums}
 .tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow-x:auto}
+.table th.ro,.table td.ro{color:var(--muted);font-style:italic}
+.table th.ro small{font-style:normal;font-weight:500;text-transform:none;letter-spacing:0}
+textarea.search{resize:vertical;font-family:inherit}
 .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
 .tabs button{border:0;background:none;padding:9px 12px;font-weight:700;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
 .tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
@@ -247,6 +250,11 @@ var STATE=null, CATALOG=null;
 var view="today",openLead=null,openProj=null,quoteForm=null,openQuoteSheet=null,quoteSnap=null,
     projTab="overview",leadFilter="All",taskFilter="Mine",search="",busy=false;
 
+/* ---- all-sections (Suppliers/Fees/Materials/Edge banding/Packages/Items/Shipments/Installations) ---- */
+var catalogTab="suppliers",logisticsTab="shipments",settingsTab="quoteSettings";
+var sectionData={},sectionSearchVal={},sectionEdit=null,secSearchTimer=null;
+var settingsData={},clausesData=null,clauseEdit=null;
+
 function loadCachedState(){try{var s=localStorage.getItem("studio_state_v1");return s?JSON.parse(s):null;}catch(e){return null;}}
 function saveCachedState(data){try{localStorage.setItem("studio_state_v1",JSON.stringify(data));}catch(e){}}
 function setBrand(name){
@@ -336,13 +344,18 @@ var ICON={
  quotes:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>',
  family:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2 21c0-3.3 2.7-6 6-6s6 2.7 6 6M14 21c0-2.2 1-4.2 2.6-5.4"/></svg>',
  money:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c0-1-1-1.8-3-1.8s-3 .8-3 1.8 1 1.5 3 1.8 3 .8 3 1.9-1 1.8-3 1.8-3-.8-3-1.8"/></svg>',
- alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>'};
-var VIEWS=[["today","Today"],["leads","Leads"],["projects","Projects"],["tasks","Tasks"],["quotes","Quotes"],["family","Family tasks"]];
+ alert:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.6 1.9 18a2 2 0 0 0 1.7 3h16.8a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>',
+ catalog:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+ logistics:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 16V7a1 1 0 0 1 1-1h10v10H1Z"/><path d="M12 10h5l4 4v2h-9zM4 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17.5 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"/></svg>',
+ settings:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>'};
+var VIEWS=[["today","Today"],["leads","Leads"],["projects","Projects"],["tasks","Tasks"],["quotes","Quotes"],["family","Family tasks"],["catalog","Catalog"],["logistics","Shipping & install"],["settings","Settings"]];
 var NAV_GROUPS=[
   {label:"Workspace",items:["today"]},
   {label:"Client journey",items:["leads","projects","quotes"]},
-  {label:"Operations",items:["tasks"]},
-  {label:"Team",items:["family"]}
+  {label:"Operations",items:["tasks","logistics"]},
+  {label:"Catalog",items:["catalog"]},
+  {label:"Team",items:["family"]},
+  {label:"Settings",items:["settings"]}
 ];
 function lateCount(){
   return STATE.leads.filter(leadAlert).length+STATE.projects.filter(projAlert).length+STATE.tasks.filter(function(t){var a=taskAlert(t);return a&&a.c==="LATE";}).length;
@@ -360,12 +373,18 @@ function renderNav(){
     return '<button data-go="'+v[0]+'" class="'+(view===v[0]?"on":"")+'">'+ICON[v[0]]+v[1]+'</button>';}).join("");
   var g=document.getElementById("famgo");g.innerHTML=ICON.family;g.className=view==="family"?"on":"";
 }
-function go(v){view=v;openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;render();window.scrollTo(0,0);}
-function closeSheet(){openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;quoteSnap=null;renderOverlay();}
+function go(v){
+  view=v;openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;sectionEdit=null;clauseEdit=null;
+  render();window.scrollTo(0,0);
+  if(v==="catalog")enterSection(catalogTab);
+  else if(v==="logistics")enterSection(logisticsTab);
+  else if(v==="settings")enterSettingsTab(settingsTab);
+}
+function closeSheet(){openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;quoteSnap=null;sectionEdit=null;clauseEdit=null;renderOverlay();}
 function renderOverlay(){
   if(!STATE){overlay.innerHTML="";return;}
-  if(!openLead&&!openProj&&!quoteForm&&!openQuoteSheet){overlay.innerHTML="";return;}
-  var inner=quoteForm?quoteFormSheet():(openQuoteSheet?quoteCalcSheet():(openLead?leadSheet(leadById(openLead)):projSheet(projById(openProj))));
+  if(!openLead&&!openProj&&!quoteForm&&!openQuoteSheet&&!sectionEdit&&!clauseEdit){overlay.innerHTML="";return;}
+  var inner=sectionEdit?sectionEditSheetHtml():(clauseEdit?clauseEditSheetHtml():(quoteForm?quoteFormSheet():(openQuoteSheet?quoteCalcSheet():(openLead?leadSheet(leadById(openLead)):projSheet(projById(openProj))))));
   overlay.innerHTML='<div class="scrim" data-close="1"></div><aside class="sheet">'+inner+'</aside>';
 }
 
@@ -591,6 +610,185 @@ function vQuotes(){
     :'<tr><td colspan="8" class="empty">No quotes yet.</td></tr>')+'</tbody></table></div>';
 }
 
+/* =================================================================== ALL SECTIONS (catalog / logistics / settings) */
+function fmtNum(v){return (Math.round(v*100)/100).toLocaleString("de-DE");}
+function loadSection(key,searchVal,cb){
+  callApi("listSection",[key,searchVal||""],function(data){
+    sectionData[key]=data;
+    if(cb)cb();else render();
+  },apiErr);
+}
+function enterSection(key){loadSection(key,sectionSearchVal[key]||"");}
+
+var CATALOG_TABS=[["suppliers","Suppliers"],["fees","Fees"],["materials","Materials"],["edgeBanding","Edge banding"],["packages","Packages"],["items","Items"]];
+var LOGISTICS_TABS=[["shipments","Shipments"],["installations","Installations"]];
+var SETTINGS_TABS=[["quoteSettings","Quote settings"],["documents","Company & documents"],["clauses","Agreement clauses"]];
+
+function onSecSearchInput(input,key){
+  sectionSearchVal[key]=input.value;
+  var pos=input.selectionStart;
+  clearTimeout(secSearchTimer);
+  secSearchTimer=setTimeout(function(){
+    loadSection(key,sectionSearchVal[key],function(){
+      render();
+      var el=document.getElementById("secsearch");
+      if(el){el.focus();try{el.setSelectionRange(pos,pos);}catch(e){}}
+    });
+  },300);
+}
+function sectionTable(key){
+  var d=sectionData[key];
+  if(!d)return '<div class="loadbox">Loading…</div>';
+  var h='<div class="sechead"><div></div><button class="btn small" data-secnew="'+key+'">+ Add row</button></div>';
+  h+='<input class="search" id="secsearch" placeholder="'+(d.searchOnly?"Type at least 2 characters to search "+esc(d.label.toLowerCase())+"…":"Search "+esc(d.label.toLowerCase())+"…")+'" value="'+esc(sectionSearchVal[key]||"")+'">';
+  if(d.searchOnly&&d.needsSearch){
+    h+='<div class="empty">There are too many rows to list all at once — start typing above to search.</div>';
+    return h;
+  }
+  h+='<div class="tablewrap"><table class="table"><thead><tr>'+
+   d.headers.map(function(hh){var ro=d.editable.indexOf(hh)<0;return '<th'+(ro?' class="ro"':"")+'>'+esc(hh)+(ro?' <small>(auto)</small>':"")+'</th>';}).join("")+
+   '<th></th></tr></thead><tbody>'+
+   (d.rows.length?d.rows.map(function(r){
+     return '<tr>'+d.headers.map(function(hh){var ro=d.editable.indexOf(hh)<0;var v=r[hh];
+       return '<td'+(ro?' class="ro"':"")+'>'+(typeof v==="number"?fmtNum(v):esc(v==null?"":v))+'</td>';}).join("")+
+      '<td><button class="btn ghost small" data-secedit="'+key+'|'+r._row+'">Edit</button></td></tr>';
+   }).join(""):'<tr><td colspan="'+(d.headers.length+1)+'" class="empty">No rows yet.</td></tr>')+
+   '</tbody></table></div>';
+  return h;
+}
+function openSectionEdit(key,row){
+  var d=sectionData[key];
+  var rec=row?(d.rows.find(function(r){return r._row===row;})):null;
+  var values={};
+  d.editable.forEach(function(h){values[h]=rec?rec[h]:"";});
+  sectionEdit={key:key,row:row||0,values:values,error:""};
+  openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;clauseEdit=null;
+  renderOverlay();
+}
+function sectionEditSheetHtml(){
+  var se=sectionEdit,d=sectionData[se.key];
+  var h='<div class="sheethead"><div><div class="cap">'+esc(d.label)+'</div><h1 style="font-size:20px">'+(se.row?"Edit row":"Add new row")+'</h1></div><button class="x" data-close="1">×</button></div>';
+  h+='<div class="card">';
+  d.editable.forEach(function(hh){
+    var v=se.values[hh];
+    h+='<label class="cap" style="display:block;margin:10px 0 4px">'+esc(hh)+'</label>'+
+     '<input class="search" style="margin:0" data-secfield="'+esc(hh)+'" value="'+esc(v==null?"":v)+'">';
+  });
+  if(se.error)h+='<p class="note" style="color:var(--late)">'+esc(se.error)+'</p>';
+  h+='<div class="btnrow"><button class="btn" data-secsave '+(busy?"disabled":"")+'>Save</button>'+
+   (se.row?'<button class="btn ghost" data-secdelete '+(busy?"disabled":"")+'>Delete</button>':"")+
+   '<button class="btn ghost" data-close="1">Cancel</button></div></div>';
+  return h;
+}
+function saveSectionEdit(){
+  var se=sectionEdit;
+  setBusy(true);renderOverlay();
+  callApi("upsertSectionRow",[se.key,se.row||0,se.values],function(){
+    setBusy(false);sectionEdit=null;toast("Saved.");
+    loadSection(se.key,sectionSearchVal[se.key]||"");
+  },function(e){setBusy(false);sectionEdit.error=e.message||String(e);renderOverlay();});
+}
+function deleteSectionEdit(){
+  var se=sectionEdit;
+  if(!confirm("Delete this row? Its editable fields will be cleared on the Sheet."))return;
+  setBusy(true);renderOverlay();
+  callApi("deleteSectionRow",[se.key,se.row],function(){
+    setBusy(false);sectionEdit=null;toast("Deleted.");
+    loadSection(se.key,sectionSearchVal[se.key]||"");
+  },function(e){setBusy(false);sectionEdit.error=e.message||String(e);renderOverlay();});
+}
+function vCatalog(){
+  var h='<h1>Catalog</h1><p class="sub">Suppliers, pricing tables and item lists used by the quote calculator. Fields marked (auto) are calculated on the Sheet and can’t be edited here.</p>';
+  h+='<div class="tabs">'+CATALOG_TABS.map(function(t){return '<button data-sectab="catalog|'+t[0]+'" class="'+(catalogTab===t[0]?"on":"")+'">'+t[1]+'</button>';}).join("")+'</div>';
+  h+=sectionTable(catalogTab);
+  return h;
+}
+function vLogistics(){
+  var h='<h1>Shipping &amp; installation</h1><p class="sub">Every shipment and installation across all projects — most fields are pulled automatically from the project once you set its Project ID.</p>';
+  h+='<div class="tabs">'+LOGISTICS_TABS.map(function(t){return '<button data-sectab="logistics|'+t[0]+'" class="'+(logisticsTab===t[0]?"on":"")+'">'+t[1]+'</button>';}).join("")+'</div>';
+  h+=sectionTable(logisticsTab);
+  return h;
+}
+
+/* ---- settings (Quote Settings / Documents) — key-value fields, saved straight on blur ---- */
+function enterSettingsTab(tab){
+  if(tab==="clauses"){callApi("getClauses",[],function(data){clausesData=data;render();},apiErr);}
+  else{callApi("getSettings",[tab],function(data){settingsData[tab]=data;render();},apiErr);}
+}
+function settingsTable(tab){
+  var d=settingsData[tab];
+  if(!d)return '<div class="loadbox">Loading…</div>';
+  if(!d.fields.length)return '<div class="empty">No editable fields found on this sheet.</div>';
+  return '<div class="card">'+d.fields.map(function(f){
+    var isLong=String(f.value||"").length>60;
+    return '<div style="margin-bottom:14px"><label class="cap" style="display:block;margin-bottom:4px">'+esc(f.label)+'</label>'+
+     (isLong?'<textarea class="search" style="margin:0;min-height:70px" data-setwrite data-setkey="'+esc(tab)+'" data-setrow="'+f.row+'">'+esc(f.value==null?"":f.value)+'</textarea>'
+            :'<input class="search" style="margin:0" data-setwrite data-setkey="'+esc(tab)+'" data-setrow="'+f.row+'" value="'+esc(f.value==null?"":f.value)+'">')+
+     (f.note?'<p class="note" style="margin:4px 0 0">'+esc(f.note)+'</p>':"")+'</div>';
+  }).join("")+'</div>';
+}
+
+/* ---- Documents: Agreement clauses sub-table ---- */
+function vClausesTable(){
+  var list=clausesData;
+  if(!list)return '<div class="loadbox">Loading…</div>';
+  var h='<div class="sechead"><div><span class="note">Numbered automatically — used by the agreement PDF.</span></div><button class="btn small" data-clausenew>+ Add clause</button></div>';
+  h+='<div class="list">'+(list.length?list.map(function(c){
+    var preview=String(c.text||"");if(preview.length>120)preview=preview.slice(0,120)+"…";
+    return '<button class="mini" style="align-items:flex-start" data-clauseedit="'+c.row+'"><span class="l"><b>'+(c.no||"")+'. '+esc(c.title||"(untitled)")+'</b><small>'+esc(preview)+'</small></span><span class="link">Edit</span></button>';
+  }).join(""):'<div class="empty">No clauses yet.</div>')+'</div>';
+  return h;
+}
+function openClauseEdit(row){
+  var c=row?(clausesData||[]).find(function(x){return x.row===row;}):null;
+  clauseEdit={row:row||0,title:c?c.title:"",text:c?c.text:"",error:""};
+  openLead=null;openProj=null;quoteForm=null;openQuoteSheet=null;sectionEdit=null;
+  renderOverlay();
+}
+function clauseEditSheetHtml(){
+  var ce=clauseEdit;
+  var h='<div class="sheethead"><div><div class="cap">Agreement clause</div><h1 style="font-size:20px">'+(ce.row?"Edit clause":"Add clause")+'</h1></div><button class="x" data-close="1">×</button></div>';
+  h+='<div class="card"><label class="cap" style="display:block;margin:0 0 4px">Title</label>'+
+   '<input class="search" style="margin:0" id="ce_title" value="'+esc(ce.title)+'">'+
+   '<label class="cap" style="display:block;margin:14px 0 4px">Text</label>'+
+   '<textarea class="search" style="margin:0;min-height:160px" id="ce_text">'+esc(ce.text)+'</textarea>'+
+   (ce.error?'<p class="note" style="color:var(--late)">'+esc(ce.error)+'</p>':"")+
+   '<div class="btnrow"><button class="btn" data-clausesave '+(busy?"disabled":"")+'>Save</button>'+
+   (ce.row?'<button class="btn ghost" data-clausedelete '+(busy?"disabled":"")+'>Delete</button>':"")+
+   '<button class="btn ghost" data-close="1">Cancel</button></div></div>';
+  return h;
+}
+function saveClauseEdit(){
+  var ce=clauseEdit;
+  var title=document.getElementById("ce_title").value,text=document.getElementById("ce_text").value;
+  function onErr(e){setBusy(false);clauseEdit.error=e.message||String(e);renderOverlay();}
+  setBusy(true);renderOverlay();
+  if(ce.row){
+    callApi("setClause",[ce.row,"title",title],function(){
+      callApi("setClause",[ce.row,"text",text],function(){
+        setBusy(false);clauseEdit=null;toast("Saved.");enterSettingsTab("clauses");
+      },onErr);
+    },onErr);
+  }else{
+    callApi("addClause",[title,text],function(){
+      setBusy(false);clauseEdit=null;toast("Clause added.");enterSettingsTab("clauses");
+    },onErr);
+  }
+}
+function deleteClauseEdit(){
+  if(!confirm("Delete this clause?"))return;
+  setBusy(true);renderOverlay();
+  callApi("deleteClause",[clauseEdit.row],function(){
+    setBusy(false);clauseEdit=null;toast("Deleted.");enterSettingsTab("clauses");
+  },function(e){setBusy(false);clauseEdit.error=e.message||String(e);renderOverlay();});
+}
+function vSettings(){
+  var h='<h1>Settings</h1><p class="sub">Pricing defaults and the wording used on quotes, agreements and other documents. Fields save automatically when you click away.</p>';
+  h+='<div class="tabs">'+SETTINGS_TABS.map(function(t){return '<button data-sectab="settings|'+t[0]+'" class="'+(settingsTab===t[0]?"on":"")+'">'+t[1]+'</button>';}).join("")+'</div>';
+  h+=(settingsTab==="clauses")?vClausesTable():settingsTable(settingsTab);
+  return h;
+}
+
 /* =================================================================== quote creation form */
 function openQuoteForm(ref,cls){quoteForm={ref:ref||"",cls:cls||"",error:""};openLead=null;openProj=null;openQuoteSheet=null;renderOverlay();}
 function quoteFormSheet(){
@@ -735,9 +933,14 @@ function render(){
   else if(view==="tasks")main.innerHTML=vTasks();
   else if(view==="quotes")main.innerHTML=vQuotes();
   else if(view==="family")main.innerHTML=vFamily();
+  else if(view==="catalog")main.innerHTML=vCatalog();
+  else if(view==="logistics")main.innerHTML=vLogistics();
+  else if(view==="settings")main.innerHTML=vSettings();
   renderOverlay();
   var s=document.getElementById("search");
   if(s)s.oninput=function(){search=s.value;var pos=s.selectionStart;render();var s2=document.getElementById("search");if(s2){s2.focus();s2.setSelectionRange(pos,pos);}};
+  var ss=document.getElementById("secsearch");
+  if(ss){var secKey=view==="catalog"?catalogTab:(view==="logistics"?logisticsTab:null);if(secKey)ss.oninput=function(){onSecSearchInput(ss,secKey);};}
 }
 
 document.body.addEventListener("click",function(e){
@@ -769,6 +972,21 @@ document.body.addEventListener("click",function(e){
     return;
   }
   var cl=e.target.closest("[data-close]");if(cl){closeSheet();return;}
+  var st=e.target.closest("[data-sectab]");if(st){
+    var parts=st.getAttribute("data-sectab").split("|"),grp=parts[0],key=parts[1];
+    if(grp==="catalog"){catalogTab=key;enterSection(key);}
+    else if(grp==="logistics"){logisticsTab=key;enterSection(key);}
+    else if(grp==="settings"){settingsTab=key;enterSettingsTab(key);}
+    render();return;
+  }
+  var sn=e.target.closest("[data-secnew]");if(sn){openSectionEdit(sn.getAttribute("data-secnew"),0);return;}
+  var se=e.target.closest("[data-secedit]");if(se){var sp=se.getAttribute("data-secedit").split("|");openSectionEdit(sp[0],+sp[1]);return;}
+  var ssv=e.target.closest("[data-secsave]");if(ssv){saveSectionEdit();return;}
+  var sde=e.target.closest("[data-secdelete]");if(sde){deleteSectionEdit();return;}
+  var cn=e.target.closest("[data-clausenew]");if(cn){openClauseEdit(0);return;}
+  var ce=e.target.closest("[data-clauseedit]");if(ce){openClauseEdit(+ce.getAttribute("data-clauseedit"));return;}
+  var csv=e.target.closest("[data-clausesave]");if(csv){saveClauseEdit();return;}
+  var cde=e.target.closest("[data-clausedelete]");if(cde){deleteClauseEdit();return;}
 });
 document.body.addEventListener("change",function(e){
   var w=e.target.closest("[data-write]");
@@ -779,6 +997,16 @@ document.body.addEventListener("change",function(e){
     else if(w.getAttribute("data-num")==="1")val=w.value===""?"":parseFloat(w.value.replace(",","."));
     else val=w.value;
     writeCell(sheetName,a1,val);
+    return;
+  }
+  var sf=e.target.closest("[data-secfield]");
+  if(sf){sectionEdit.values[sf.getAttribute("data-secfield")]=sf.value;return;}
+  var sw=e.target.closest("[data-setwrite]");
+  if(sw){
+    var key=sw.getAttribute("data-setkey"),row=+sw.getAttribute("data-setrow");
+    setBusy(true);
+    callApi("setSetting",[key,row,sw.value],function(){setBusy(false);toast("Saved.");enterSettingsTab(key);},function(e){setBusy(false);apiErr(e);});
+    return;
   }
 });
 
