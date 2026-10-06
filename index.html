@@ -194,15 +194,34 @@ button.mini:hover{background:var(--sunk)}
 // This is the Apps Script Web App's /exec URL. If you ever create a brand-new deployment
 // (instead of Manage deployments > edit the existing one > New version), update this.
 var API_URL="https://script.google.com/macros/s/AKfycbyTBWzUcmInZgYVHiHK0zJEjck5WmVnQAua0rfrdIh-5RIie46q1HSbgnCU6fXiR3uy/exec";
+// Apps Script responses don't carry the header that would let fetch() read them from another
+// domain, so this loads the response as a <script> tag instead (JSONP) — script tags are not
+// subject to CORS. Safe here because this app only ever calls its own Apps Script backend.
+var __jsonpSeq=0;
 function callApi(fn,args,onSuccess,onError){
-  var url=API_URL+"?fn="+encodeURIComponent(fn)+"&args="+encodeURIComponent(JSON.stringify(args||[]))+"&_ts="+Date.now();
-  fetch(url,{method:"GET",cache:"no-store"})
-    .then(function(r){return r.json();})
-    .then(function(res){
-      if(res&&res.ok)onSuccess(res.data);
-      else onError({message:(res&&res.error)||"Unknown error"});
-    })
-    .catch(function(err){onError({message:"Could not reach the Sheet ("+(err&&err.message?err.message:err)+")"});});
+  var cbName="__studioCb"+(++__jsonpSeq)+"_"+Date.now();
+  var script=document.createElement("script");
+  var done=false;
+  var timer=setTimeout(function(){
+    if(done)return;done=true;cleanup();
+    onError({message:"Timed out waiting for the Sheet. Check your connection and try again."});
+  },20000);
+  function cleanup(){
+    clearTimeout(timer);
+    delete window[cbName];
+    if(script.parentNode)script.parentNode.removeChild(script);
+  }
+  window[cbName]=function(res){
+    if(done)return;done=true;cleanup();
+    if(res&&res.ok)onSuccess(res.data);
+    else onError({message:(res&&res.error)||"Unknown error"});
+  };
+  script.onerror=function(){
+    if(done)return;done=true;cleanup();
+    onError({message:"Could not reach the Sheet (network error)."});
+  };
+  script.src=API_URL+"?fn="+encodeURIComponent(fn)+"&args="+encodeURIComponent(JSON.stringify(args||[]))+"&callback="+cbName+"&_ts="+Date.now();
+  document.head.appendChild(script);
 }
 
 /* =================================================================== state */
